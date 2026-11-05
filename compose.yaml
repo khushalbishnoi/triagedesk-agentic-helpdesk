@@ -1,0 +1,92 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9000
+      STUB_MODE: ${STUB_MODE:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      MAX_ARTICLES: ${MAX_ARTICLES:-3}
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - from urllib.request import urlopen; urlopen('http://127.0.0.1:9000/healthz')
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./server
+      dockerfile: dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      MONGO_URI: mongodb://mongo:27017/helpdesk
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deploy}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_SECRET: ${REFRESH_SECRET:-local-development-refresh-secret-change-before-deploy}
+      REFRESH_EXPIRES_IN: ${REFRESH_EXPIRES_IN:-7d}
+      AGENT_BASE_URL: http://agent:9000
+      AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-8000}
+      AGENT_RETRY: ${AGENT_RETRY:-2}
+      AUTO_CLOSE_ENABLED: ${AUTO_CLOSE_ENABLED:-true}
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.78}
+      SLA_HOURS: ${SLA_HOURS:-24}
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8080/api/healthz').then(r =>
+          process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    restart: unless-stopped
+    environment:
+      API_PROXY_TARGET: http://api:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mongo_data:

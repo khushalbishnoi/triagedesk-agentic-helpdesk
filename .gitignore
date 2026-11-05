@@ -102,6 +102,7 @@ temp/
 
 # Docker
 .dockerignore
+!.dockerignore
 
 # Lock files (keep package-lock.json and yarn.lock for consistency)
 # Uncomment if you want to ignore lock files

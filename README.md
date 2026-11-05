@@ -209,13 +209,32 @@ Frontend runs on http://localhost:5173.
 From repository root:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Services:
 
+- Frontend: http://localhost:5173
 - API: http://localhost:8080
 - Agent: http://localhost:9000
+- MongoDB: localhost:27017
+
+On the first run, seed the database in another terminal:
+
+```bash
+docker compose exec api npm run seed
+```
+
+The seed script deletes existing users, articles, tickets, and config before recreating the demo users and knowledge base, so run it only when initializing or intentionally resetting local data. MongoDB data persists in the `mongo_data` Docker volume.
+
+The agent runs in stub mode by default and does not need an API key. To enable Gemini, create a root `.env` file with:
+
+```env
+STUB_MODE=false
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+Then restart the stack with `docker compose up --build`. Compose defaults for JWT secrets are for local development; set `JWT_SECRET` and `REFRESH_SECRET` in the root `.env` before deploying anywhere shared or public.
 
 ---
 
